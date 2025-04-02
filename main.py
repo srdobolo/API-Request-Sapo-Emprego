@@ -2,41 +2,39 @@ import requests
 from bs4 import BeautifulSoup
 import json
 import html
-from urllib.parse import urljoin, urlparse, urlunparse
+from datetime import datetime
 
-# Base URL for the find-jobs section
-BASE_URL = 'https://www.recruityard.com/find-jobs-all/'
+# Single job URL for debugging
+JOB_URL = "https://www.recruityard.com/find-jobs-all/beauty-advisor-with-german-in-porto-pt"
 
-# API endpoint and key
-API_URL = "http://partner.net-empregos.com/hrsmart_insert.asp"
-REMOVE_API_URL = "http://partner.net-empregos.com/hrsmart_remove.asp"
+# API endpoints (Sandbox)
+API_BASE_URL = "https://qa.services.telecom.pt/SAPOEmprego"
+ENDPOINTS = {
+    "available_slots_id": "/availablePositions.list",
+    "category_ids": "/jobCategories.list",
+    "country_id": "/countries.list",
+    "district_ids": "/districts.list",
+    "municipality_id": "/municipalities.list",
+    "contract_type_id": "/contractTypes.list",
+    "schedule_type_id": "/workHours.list",
+    "min_qualifications_id": "/qualifications.list",
+    "professional_experience_id": "/jobExperience.list",
+    "annual_salary_range_id": "/jobSalaryRange.list"
+}
+OFFERS_ADD_URL = f"{API_BASE_URL}/offers.add"
 KEY_FILE_PATH = "API_ACCESS_KEY"
 MAPPING_FILE_PATH = "mapping.json"
 
-# Headers to mimic a browser request
-HEADERS = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
-
-# Counter for successful job requests
-successful_requests = 0
-
-# Function to clean URLs and avoid duplicate segments
-def clean_url(base, href):
-    full_url = urljoin(base, href)
-    parsed = urlparse(full_url)
-    path_segments = parsed.path.split('/')
-    cleaned_path = '/'.join([seg for i, seg in enumerate(path_segments) if seg != 'find-jobs-all' or i == path_segments.index('find-jobs-all')])
-    return urlunparse((parsed.scheme, parsed.netloc, cleaned_path, parsed.params, parsed.query, parsed.fragment))
+# Headers with API token
+HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+}
 
 # Function to convert full HTML to minimalist HTML with only <br>
 def simplify_html(html_text):
-    # Parse HTML content
     soup = BeautifulSoup(html_text, 'html.parser')
-    
-    # Remove script and style elements
     for element in soup(['script', 'style']):
         element.decompose()
-    
-    # Get text with breaks
     lines = []
     for element in soup.recursiveChildGenerator():
         if isinstance(element, str):
@@ -44,9 +42,7 @@ def simplify_html(html_text):
             if text:
                 lines.append(text)
         elif element.name in ['br', 'p', 'div', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6']:
-            lines.append('')  # Add empty line for block elements
-    
-    # Join lines with <br> tags, skipping consecutive empty lines
+            lines.append('')
     result = ''
     prev_empty = False
     for line in lines:
@@ -56,132 +52,179 @@ def simplify_html(html_text):
         elif not prev_empty:
             result += '<br>'
             prev_empty = True
-    
-    # Remove trailing <br> if present
     if result.endswith('<br>'):
         result = result[:-4]
-    
     return result
 
-# Read the API key
+# Function to fetch data from an endpoint and return it
+def fetch_endpoint_data(endpoint, api_token):
+    url = f"{API_BASE_URL}{ENDPOINTS[endpoint]}"
+    headers = HEADERS.copy()
+    headers['X-API-TOKEN'] = api_token
+    print(f"Attempting to fetch {endpoint} from {url}")
+    try:
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        data = response.json()
+        print(f"Response from {endpoint} ({url}):", json.dumps(data, indent=2))
+        return data
+    except requests.RequestException as e:
+        print(f"Error fetching {endpoint} from {url}: {e}")
+        if 'response' in locals():
+            print(f"Response status: {response.status_code}, content: {response.text}")
+        return None
+    except json.JSONDecodeError as e:
+        print(f"Error decoding JSON from {endpoint}: {e}")
+        return None
+
+# Function to create mapping.json from endpoint data
+def create_mapping_file(api_token):
+    mappings = {}
+    critical_fields = ["country_id", "district_ids", "category_ids", "schedule_type_id", "annual_salary_range_id"]
+    
+    for endpoint in ENDPOINTS:
+        data = fetch_endpoint_data(endpoint, api_token)
+        # Handle both {"total": N, "data": [...]} and {"data": [...]} structures
+        if data and isinstance(data, dict):
+            items = data.get('data', [])  # Default to empty list if 'data' is missing
+            if not isinstance(items, list):
+                print(f"Skipping {endpoint} - 'data' is not a list: {items}")
+                mappings[endpoint] = {}
+                continue
+            try:
+                mapping_dict = {}
+                for item in items:
+                    if 'id' not in item:
+                        print(f"Warning: Item in {endpoint} lacks 'id': {item}")
+                        continue
+                    # Expanded key fallback chain to match all known fields
+                    key = (item.get('code') or 
+                           item.get('name') or 
+                           item.get('description') or 
+                           item.get('pay_range') or 
+                           item.get('experience') or 
+                           item.get('qualification') or 
+                           item.get('work_hours') or 
+                           item.get('contract_type') or 
+                           item.get('municipality') or 
+                           item.get('district') or 
+                           item.get('country') or 
+                           item.get('category') or 
+                           item.get('position') or 
+                           str(item.get('id'))).lower()
+                    if not key:
+                        print(f"Warning: No valid key found for item in {endpoint}: {item}")
+                        continue
+                    mapping_dict[key] = item['id']
+                    print(f"Debug: {endpoint} mapped '{key}' to {item['id']}")
+                mappings[endpoint] = mapping_dict
+                if not mapping_dict:
+                    print(f"Warning: No valid mappings found for {endpoint} (empty or no valid items)")
+            except (KeyError, TypeError) as e:
+                print(f"Error parsing {endpoint} data: {e}")
+                mappings[endpoint] = {}
+        else:
+            print(f"Skipping {endpoint} - no valid data returned (data: {data})")
+            mappings[endpoint] = {}
+
+    # Log the mappings before saving
+    print("Generated mappings:", json.dumps(mappings, indent=2))
+
+    # Check for critical empty mappings, but proceed with warnings
+    missing_critical = [field for field in critical_fields if not mappings.get(field)]
+    if missing_critical:
+        print(f"Warning: Critical fields {missing_critical} are empty in mappings. Using fallbacks.")
+
+    # Save to mapping.json even if empty
+    try:
+        with open(MAPPING_FILE_PATH, 'w', encoding='utf-8') as f:
+            json.dump(mappings, f, indent=2, ensure_ascii=False)
+        print(f"Created {MAPPING_FILE_PATH} successfully.")
+    except Exception as e:
+        print(f"Error writing {MAPPING_FILE_PATH}: {e}")
+        exit(1)
+
+    return mappings
+
+# Read the API token
 try:
     with open(KEY_FILE_PATH, "r") as file:
-        API_KEY = file.read().strip()
+        API_TOKEN = file.read().strip()
 except FileNotFoundError:
     print(f"Error: The file '{KEY_FILE_PATH}' was not found. Please ensure it exists.")
     exit(1)
 
-# Load the mapping file
-try:
-    with open(MAPPING_FILE_PATH, "r", encoding="iso-8859-1") as file:
-        mappings = json.load(file)
-except FileNotFoundError:
-    print(f"Error: The file '{MAPPING_FILE_PATH}' was not found. Please ensure it exists.")
-    exit(1)
-except json.JSONDecodeError as e:
-    print(f"Error: Failed to parse '{MAPPING_FILE_PATH}': {e}")
-    exit(1)
+# Create or update mapping.json
+mappings = create_mapping_file(API_TOKEN)
 
-# Step 1: Load the main jobs page to find all job links
+# Fetch the job page
+print(f"Fetching job page: {JOB_URL}")
 try:
-    print(f"Fetching base URL: {BASE_URL}")
-    response = requests.get(BASE_URL, headers=HEADERS)
+    response = requests.get(JOB_URL, headers=HEADERS)
     response.raise_for_status()
-    html_content = response.content
+    job_html_content = response.content
 except requests.RequestException as e:
-    print(f"Error fetching base URL: {e}")
+    print(f"Error fetching job URL {JOB_URL}: {e}")
     exit(1)
 
-# Step 2: Parse the HTML with BeautifulSoup to find all job links
-soup = BeautifulSoup(html_content, 'html.parser')
+# Parse the job page
+job_soup = BeautifulSoup(job_html_content, 'html.parser')
+script_tag = job_soup.find('script', type='application/ld+json')
 
-# Debug: Print all hrefs for inspection
-all_hrefs = [a['href'] for a in soup.find_all('a', href=True)]
-print("All hrefs on page:", all_hrefs)
-
-# Extract job links, deduplicate, and filter those ending with "pt"
-job_links = list(set([
-    clean_url(BASE_URL, a['href']) for a in soup.find_all('a', href=True)
-    if '/find-jobs-all/' in a['href'] and a['href'].endswith('pt')
-]))
-
-print(f"Found {len(job_links)} job(s) to process ending with 'pt': {job_links}")
-
-# Step 3: Process each job link
-for job_url in job_links:
-    print(f"Fetching job page: {job_url}")
+if script_tag and script_tag.string:
+    json_content = script_tag.string
     try:
-        response = requests.get(job_url, headers=HEADERS)
-        response.raise_for_status()
-        job_html_content = response.content
+        json_content_unescaped = html.unescape(json_content)
+        data = json.loads(json_content_unescaped)
 
-        job_soup = BeautifulSoup(job_html_content, 'html.parser')
-        script_tag = job_soup.find('script', type='application/ld+json')
+        # Debug: Print raw JSON data
+        print("Raw JSON data:", json.dumps(data, indent=2))
 
-        if script_tag and script_tag.string:
-            json_content = script_tag.string
+        # Simplify the HTML description
+        minimalist_description = simplify_html(data.get('description', ''))
 
-            try:
-                json_content_unescaped = html.unescape(json_content)
-                data = json.loads(json_content_unescaped)
+        # Map data to SAPO Emprego fields using fetched mappings with fallbacks
+        payload = {
+            "title": data.get('title', 'Undisclosed Job Title'),
+            "offer_description": minimalist_description,
+            "description": (
+                f"<a href=\"{JOB_URL}?id={data.get('identifier', {}).get('value', 'job001')}&utm_source=SAPO_Emprego\" target=\"_blank\">Clique aqui para se candidatar!</a><br>"
+                f"ou por email para info@recruityard.com"
+            ),
+            "reference": data.get('identifier', {}).get('value', 'job001'),
+            "country_id": mappings.get('country_id', {}).get('portugal', 620),
+            "district_ids": [mappings.get('district_ids', {}).get('porto', 13)],
+            "location": data.get('jobLocation', {}).get('address', {}).get('addressLocality', 'Porto'),
+            "employment_type": data.get('employmentType', 'FULL_TIME'),
+            "category_ids": [mappings.get('category_ids', {}).get('customer service', 9)],  # Assuming 'Call-Center' fits
+            "anonymous_company": False,
+            "schedule_type_id": mappings.get('schedule_type_id', {}).get('full-time', 1),
+            "annual_salary_range_id": mappings.get('annual_salary_range_id', {}).get('1084 - 1448', 2),
+            "emails_to_notify": ["info@recruityard.com"],
+            "start_date": data.get('datePosted', datetime.now().strftime('%Y-%m-%d')),
+            "end_date": data.get('validThrough', (datetime.now().replace(year=datetime.now().year + 1)).strftime('%Y-%m-%d'))
+        }
 
-                formatted_description, zona, categoria, tipo = clean_job_data(data, mappings)
-                
-                # Simplify the HTML description
-                minimalist_description = simplify_html(formatted_description)
+        # Remove None values from payload
+        payload = {k: v for k, v in payload.items() if v is not None}
 
-                payload = {
-                    "ACCESS": API_KEY,
-                    "REF": data.get('identifier', {}).get('value', 'job001'),
-                    "TITULO": data.get('title', 'undisclosed'),
-                    "TEXTO": (
-                        f"{minimalist_description}<br><br>" +
-                        f"<a href=\"{job_url}?id={data.get('identifier', {}).get('value', 'job001')}&utm_source=NET_EMPREGOS\" target=\"_blank\">Clique aqui para se candidatar!</a><br>" +
-                        f"ou por email para info@recruityard.com"
-                    ),
-                    "ZONA": zona,
-                    "CATEGORIA": categoria,
-                    "TIPO": tipo,
-                }
+        # Debug: Print the payload
+        print("Payload to be sent:", json.dumps(payload, indent=2, ensure_ascii=False))
 
-                encoded_payload = {
-                    key: (value.encode('iso-8859-1', errors='replace') if isinstance(value, str) else value)
-                    for key, value in payload.items()
-                }
-
-                remove_payload = {
-                    "ACCESS": API_KEY,
-                    "REF": data.get('identifier', {}).get('value', 'job001'),
-                }
-
-                try:
-                    remove_response = requests.get(REMOVE_API_URL, params=remove_payload)
-                    if remove_response.status_code == 200:
-                        print(f"Job '{remove_payload['REF']}' successfully removed.")
-                    else:
-                        print(f"Failed to remove job '{remove_payload['REF']}'. HTTP Status: {remove_response.status_code}")
-                        print("Response Content:", remove_response.text)
-                except requests.RequestException as e:
-                    print(f"Error removing job '{remove_payload['REF']}': {e}")
-                    continue
-
-                post_response = requests.post(API_URL, data=encoded_payload)
-                if post_response.status_code == 200:
-                    print(f"Job '{payload['TITULO']}' successfully sent.")
-                    successful_requests += 1
-                else:
-                    print(f"Failed to send job '{payload['TITULO']}'. HTTP Status: {post_response.status_code}")
-                    print("Response Content:", post_response.text)
-
-            except json.JSONDecodeError:
-                print(f"Error: Could not decode JSON from the script tag at {job_url}.")
-            except Exception as e:
-                print(f"Unexpected error processing job at {job_url}: {e}")
+        # POST request to SAPO Emprego API
+        HEADERS['X-API-TOKEN'] = API_TOKEN
+        post_response = requests.post(OFFERS_ADD_URL, json=payload, headers=HEADERS)
+        if post_response.status_code in (200, 201):
+            print(f"Job '{payload['title']}' successfully sent.")
+        elif post_response.status_code == 429:
+            print(f"Throttle limit reached. Status: 429. Please wait before retrying.")
         else:
-            print(f"No JSON script tag found at {job_url}.")
+            print(f"Failed to send job '{payload['title']}'. HTTP Status: {post_response.status_code}")
+            print("Response Content:", post_response.text)
 
-    except requests.RequestException as e:
-        print(f"Error fetching job URL {job_url}: {e}")
-
-print("Processing complete.")
-print(f"Total number of job requests successfully sent: {successful_requests}")
+    except json.JSONDecodeError:
+        print(f"Error: Could not decode JSON from the script tag at {JOB_URL}.")
+    except Exception as e:
+        print(f"Unexpected error processing job at {JOB_URL}: {e}")
+else:
+    print(f"No JSON script tag found at {JOB_URL}.")
