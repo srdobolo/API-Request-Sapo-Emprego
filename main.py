@@ -3,9 +3,10 @@ from bs4 import BeautifulSoup
 import json
 import html
 from datetime import datetime
+from country_mapping import country_mapping
 
 # Single job URL for debugging
-JOB_URL = "https://www.recruityard.com/find-jobs-all/beauty-advisor-with-german-in-porto-pt"
+JOB_URL = "https://www.recruityard.com/find-jobs-all/client-support-with-german-remote-in-portugal-pt"
 
 # API endpoints (Sandbox)
 API_BASE_URL = "https://qa.services.telecom.pt/SAPOEmprego"
@@ -53,6 +54,21 @@ def simplify_html(html_text):
     if result.endswith('<br>'):
         result = result[:-4]
     return result
+
+def convert_to_plain_text(html_text):
+    """Convert HTML text to plain text without any HTML tags."""
+    soup = BeautifulSoup(html_text, 'html.parser')
+    
+    # Remove unwanted elements
+    for element in soup(['script', 'style']):
+        element.decompose()
+    
+    # Extract plain text
+    text = soup.get_text(separator='\n', strip=True)
+    
+    # Clean up multiple newlines
+    lines = [line for line in text.split('\n') if line]
+    return ' '.join(lines)
 
 def fetch_endpoint_data(endpoint, api_token):
     url = f"{API_BASE_URL}{ENDPOINTS[endpoint]}"
@@ -155,8 +171,8 @@ if script_tag and script_tag.string:
         data = json.loads(json_content_unescaped)
         print("Raw JSON-LD data:", json.dumps(data, indent=2))
 
-        # Simplify description
-        minimalist_description = simplify_html(data.get('description', ''))
+        # Convert description to plain text
+        plain_description = convert_to_plain_text(data.get('description', ''))
 
         # Extract and format dates
         start_date_raw = data.get('datePosted', datetime.now().strftime('%Y-%m-%d'))
@@ -165,39 +181,90 @@ if script_tag and script_tag.string:
         start_date = start_date_raw.split('T')[0] if 'T' in start_date_raw else start_date_raw
         end_date = end_date_raw.split('T')[0] if 'T' in end_date_raw else end_date_raw
 
+        region = data.get('jobLocation', {}).get('address', {}).get('addressRegion', '').lower()
+        if region == 'lisbon':
+            region = 'lisboa'
+        
+        work_model = data.get('jobLocationType', {})
+        if work_model == 'TELECOMMUTE':
+            work_model = 'remote'
+        else:
+            work_model = 'presential'
+
+        category_ids = data.get('industry', {}).get('value', '').lower()
+        if category_ids == 'Customer Service':
+            category_ids = 'call-center, helpdesk e telemarketing'
+        elif category_ids == 'Healthcare':
+            category_ids = 'saúde'
+
+        schedule_type = data.get('employmentType', {})
+        if schedule_type == 'FULL_TIME':
+            schedule_type = 'full-time'
+        elif schedule_type == 'PART_TIME':
+            schedule_type = 'part-time'
+
+        # Extract salary value
+        salary_value = data.get('baseSalary', {}).get('value', {}).get('value', 'undisclosed')
+        min_salary = 'undisclosed'
+        max_salary = 'undisclosed'
+
+        # Process salary if it's a string
+        if isinstance(salary_value, str):
+            # Handle range format like "1050 - 1300"
+            if '-' in salary_value:
+                salary_parts = [part.strip() for part in salary_value.split('-')]
+                if len(salary_parts) == 2:
+                    # Check if both parts are valid numbers
+                    if (salary_parts[0].replace('.', '').isdigit() and 
+                        salary_parts[1].replace('.', '').isdigit()):
+                        min_salary = float(salary_parts[0])  # Convert to float
+                        max_salary = float(salary_parts[1])  # Convert to float
+
+        max_annual_salary = max_salary*12   
+
+        if max_annual_salary < 15000:
+            max_annual_salary = 'até 15.000€'
+        elif max_annual_salary >= 15000 and max_annual_salary < 25000:
+            max_annual_salary = 'de 15.000€ a 25.000€'
+        elif max_annual_salary >= 25000 and max_annual_salary < 35000:
+            max_annual_salary = 'de 25.000€ a 35.000€'
+        elif max_annual_salary >= 35000 and max_annual_salary < 50000:  
+            max_annual_salary = 'de 35.000€ a 50.000€'
+        elif max_annual_salary > 50000:
+            max_annual_salary = 'mais de 50.000€'
+        else:
+            max_annual_salary = 'a definir'
+        
+        country_id = data.get('jobLocation', {}).get('address', {}).get('addressCountry', 'PT').upper()
+        country_id = country_mapping.get(country_id, country_id) 
+
         # Payload construction
         payload = {
-            "title": data.get('title', 'Undisclosed Job Title'),
-            "offer_description": minimalist_description,
-            "description": (
-                f"<a href=\"{JOB_URL}?id={data.get('identifier', {}).get('value', 'job001')}&utm_source=SAPO_Emprego\" target=\"_blank\">Clique aqui para se candidatar!</a><br>"
-                f"ou por email para info@recruityard.com"
-            ),
-            "reference": data.get('identifier', {}).get('value', 'job001'),
-            "available_slots_id": 14,  # Default value
-            "country_id": mappings.get('country_id', {}).get(
-                data.get('jobLocation', {}).get('address', {}).get('addressCountry', 'portugal').lower(), 620
-            ),
-            "district_ids": [mappings.get('district_ids', {}).get(
-                data.get('jobLocation', {}).get('address', {}).get('addressRegion', 'porto').lower(), 13
-            )],
-            "location": data.get('jobLocation', {}).get('address', {}).get('addressLocality', {}),
-            "work_model",
-            "employment_type": data.get('employmentType', 'FULL_TIME'),
+            "title": data.get('title', ''),
+            "offer_description": plain_description,
+            "reference": data.get('identifier', {}).get('value', ''),
+            "country_id": mappings.get('country_id', {}).get(country_id, country_id),
+            "district_ids": [mappings.get('district_ids', {}).get(region, 0)],  # Array with mapped ID
+            "work_model": work_model,
             "category_ids": [mappings.get('category_ids', {}).get(
-                data.get('industry', {}).get('value', {}).lower(), 7
-            )],
-            "anonymous_company": False,
-            "schedule_type_id": mappings.get('schedule_type_id', {}).get(
-                data.get('employmentType', 'FULL_TIME').lower().replace('_', '-'), 1
-            ),
-            "annual_salary_range_id": mappings.get('annual_salary_range_id', {}).get('1084 - 1448', 2),  # Adjust if needed
-            "emails_to_notify": ["info@recruityard.com"],
+                "call-center, helpdesk e telemarketing" if category_ids == "customer service" else category_ids, 
+                category_ids
+            )],  # Array with mapped ID
+            "anonymous_company": False,  # Boolean value
+            "schedule_type_id": mappings.get('schedule_type_id', {}).get(schedule_type.lower(), None),  # Numeric ID
+            "annual_salary_range_id": mappings.get('annual_salary_range_id', {}).get(max_annual_salary.lower(), None),  # Numeric ID
+            "emails_to_notify": ["info@recruityard.com"],  # Array of emails
             "start_date": start_date,
             "end_date": end_date
         }
 
-        # Remove None values
+        # Remove None values and ensure critical fields are present
+        required_fields = ["country_id", "schedule_type_id", "annual_salary_range_id"]
+        for field in required_fields:
+            if payload.get(field) is None:
+                print(f"Error: Required field '{field}' could not be mapped. Check mapping.json.")
+                exit(1)
+
         payload = {k: v for k, v in payload.items() if v is not None}
 
         print("Payload to be sent:", json.dumps(payload, indent=2, ensure_ascii=False))
