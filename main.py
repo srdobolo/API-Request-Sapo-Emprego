@@ -6,7 +6,7 @@ from datetime import datetime
 from country_mapping import country_mapping
 
 # Single job URL for debugging
-JOB_URL = "https://www.recruityard.com/find-jobs-all/client-support-with-german-remote-in-portugal-pt"
+JOB_URL = "https://www.recruityard.com/find-jobs-all/enfermeiros-as-para-belgica-pt"
 
 # API endpoints (Sandbox)
 API_BASE_URL = "https://qa.services.telecom.pt/SAPOEmprego"
@@ -220,18 +220,19 @@ if script_tag and script_tag.string:
                         min_salary = float(salary_parts[0])  # Convert to float
                         max_salary = float(salary_parts[1])  # Convert to float
 
-        max_annual_salary = max_salary*12   
+        if isinstance(max_salary, (int, float)):
+            max_annual_salary = max_salary * 12
 
-        if max_annual_salary < 15000:
-            max_annual_salary = 'até 15.000€'
-        elif max_annual_salary >= 15000 and max_annual_salary < 25000:
-            max_annual_salary = 'de 15.000€ a 25.000€'
-        elif max_annual_salary >= 25000 and max_annual_salary < 35000:
-            max_annual_salary = 'de 25.000€ a 35.000€'
-        elif max_annual_salary >= 35000 and max_annual_salary < 50000:  
-            max_annual_salary = 'de 35.000€ a 50.000€'
-        elif max_annual_salary > 50000:
-            max_annual_salary = 'mais de 50.000€'
+            if max_annual_salary < 15000:
+                max_annual_salary = 'até 15.000€'
+            elif max_annual_salary < 25000:
+                max_annual_salary = 'de 15.000€ a 25.000€'
+            elif max_annual_salary < 35000:
+                max_annual_salary = 'de 25.000€ a 35.000€'
+            elif max_annual_salary < 50000:
+                max_annual_salary = 'de 35.000€ a 50.000€'
+            else:
+                max_annual_salary = 'mais de 50.000€'
         else:
             max_annual_salary = 'a definir'
         
