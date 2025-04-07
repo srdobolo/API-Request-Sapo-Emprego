@@ -30,31 +30,6 @@ HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
 }
 
-def simplify_html(html_text):
-    soup = BeautifulSoup(html_text, 'html.parser')
-    for element in soup(['script', 'style']):
-        element.decompose()
-    lines = []
-    for element in soup.recursiveChildGenerator():
-        if isinstance(element, str):
-            text = element.strip()
-            if text:
-                lines.append(text)
-        elif element.name in ['br', 'p', 'div', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6']:
-            lines.append('')
-    result = ''
-    prev_empty = False
-    for line in lines:
-        if line:
-            result += line + '<br>'
-            prev_empty = False
-        elif not prev_empty:
-            result += '<br>'
-            prev_empty = True
-    if result.endswith('<br>'):
-        result = result[:-4]
-    return result
-
 def convert_to_plain_text(html_text):
     """Convert HTML text to plain text without any HTML tags."""
     soup = BeautifulSoup(html_text, 'html.parser')
@@ -191,7 +166,7 @@ if script_tag and script_tag.string:
         else:
             work_model = 'presential'
 
-        category_ids = data.get('industry', {}).get('value', '').lower()
+        category_ids = data.get('industry', {}).get('value', '')
         if category_ids == 'Customer Service':
             category_ids = 'call-center, helpdesk e telemarketing'
         elif category_ids == 'Healthcare':
