@@ -31,57 +31,30 @@ HEADERS = {
 }
 
 def convert_to_plain_text(html_text):
-    """Convert HTML to plain text, handling <p>, <h3>, and <ul>/<li> with proper spacing."""
     soup = BeautifulSoup(html_text, 'html.parser')
+    output = []
     
-    # Remove unwanted elements
-    for element in soup(['script', 'style']):
-        element.decompose()
-    
-    # Replace <br> with newlines
-    for br in soup('br'):
-        br.replace_with('\n')
-    
-    # Handle paragraphs
-    for p in soup.find_all('p'):
-        p.insert_before('\n\n')  # Add double newline after the paragraph
-        p.unwrap()              # Remove the <p> tags, keeping the content
-    
-    # Handle section headers (<h3>)
-    for h3 in soup('h3'):
-        h3.insert_before('\n')  # Blank line before header
-        h3.insert_after('\n')   # Blank line after header
-        h3.unwrap()
-    
-    # Handle lists
-    for ul in soup('ul'):
-        ul.insert_before('\n')  # Ensure blank line before list
-        ul.insert_after('\n')   # Ensure blank line after list
-        ul.unwrap()
-    
-    for li in soup('li'):
-        text = li.get_text(strip=True)
-        if not text.startswith('-'):  # Add dash only if not present
-            li.insert(0, '- ')
-        li.insert_after('\n')
-        li.unwrap()
-    
-    # Get text and process lines
-    text = soup.get_text()
-    lines = [line.strip() for line in text.split('\n') if line.strip()]
-    
-    # Ensure proper spacing and fix double dashes
-    output_lines = []
-    for i, line in enumerate(lines):
-        # Remove extra dash if present
-        if line.startswith('- -'):
-            line = line.replace('- -', '-')
-        output_lines.append(line)
-        # Add blank line after last list item before next section or paragraph
-        if line.startswith('-') and i + 1 < len(lines) and not lines[i + 1].startswith('-'):
-            output_lines.append('')
-    
-    return '\n'.join(output_lines)
+    # Iterate through all elements in the parsed HTML
+    for tag in soup.find_all(['p', 'h3', 'li']):
+        if tag.name == 'p':
+            # Paragraphs are added as-is with a blank line after
+            output.append(tag.get_text().strip())
+            output.append("")
+        elif tag.name == 'h3':
+            # Headers are added with a colon and a blank line after
+            output.append(tag.get_text().strip())
+            output.append("")
+        elif tag.name == 'li':
+            # Add the list item text
+            output.append(tag.get_text().strip())
+            # Check if this is the last <li> in its <ul> parent
+            parent_ul = tag.find_parent('ul')
+            if parent_ul and tag == parent_ul.find_all('li')[-1]:
+                # Add an extra blank line after the last <li> in the <ul>
+                output.append("")
+
+    # Join all lines into a single string, removing extra blank lines at the end
+    return "\n".join(output).rstrip()
 
 def fetch_endpoint_data(endpoint, api_token):
     url = f"{API_BASE_URL}{ENDPOINTS[endpoint]}"
