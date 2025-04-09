@@ -12,8 +12,8 @@ from country_mapping import country_mapping
 # Base URL for the find-jobs section
 BASE_URL = 'https://www.recruityard.com/find-jobs-all/'
 
-# API endpoints (Sandbox)
-API_BASE_URL = "https://qa.services.telecom.pt/SAPOEmprego"
+# API endpoints (Production)
+API_BASE_URL = "https://services.sapo.pt/SAPOEmprego"
 ENDPOINTS = {
     "available_slots_id": "/availablePositions.list",
     "category_ids": "/jobCategories.list",
