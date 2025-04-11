@@ -147,8 +147,8 @@ def process_job(job_url, mappings, api_token):
         data = json.loads(json_content_unescaped)
 
         plain_description = convert_to_plain_text(data.get('description', ''))
-        start_date_raw = data.get('datePosted', datetime.now().strftime('%Y-%m-%d'))
-        end_date_raw = data.get('validThrough', (datetime.now().replace(year=datetime.now().year + 1)).strftime('%Y-%m-%d'))
+        start_date_raw = datetime.now().strftime('%Y-%m-%d')
+        end_date_raw = (datetime.now().replace(month=datetime.now().month + 1)).strftime('%Y-%m-%d')
         start_date = start_date_raw.split('T')[0] if 'T' in start_date_raw else start_date_raw
         end_date = end_date_raw.split('T')[0] if 'T' in end_date_raw else end_date_raw
 
