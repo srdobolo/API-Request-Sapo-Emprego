@@ -252,19 +252,11 @@ def process_job(job_url, mappings, api_token):
     except Exception as e:
         failed_submissions.append((job_url, "Unknown", str(e)))
 
-# Load API token and mappings
-try:
-    with open(KEY_FILE_PATH, "r") as file:
-        API_TOKEN = file.read().strip()
-except FileNotFoundError:
-    print(f"Error: The file '{KEY_FILE_PATH}' was not found.")
-    exit(1)
-
 try:
     with open(MAPPING_FILE_PATH, 'r', encoding='utf-8') as f:
         mappings = json.load(f)
 except FileNotFoundError:
-    mappings = create_mapping_file(API_TOKEN)
+    mappings = create_mapping_file(KEY_FILE_PATH)
 
 # Fetch job links
 try:
@@ -280,7 +272,7 @@ except requests.RequestException as e:
 
 # Process jobs with rate limiting (15 requests per minute = 4 seconds per request)
 for job_url in job_links:
-    process_job(job_url, mappings, API_TOKEN)
+    process_job(job_url, mappings, KEY_FILE_PATH)
     time.sleep(5)  # Enforce 15 requests per minute
 
 # Retry failed jobs due to rate limiting
@@ -289,7 +281,7 @@ if retry_queue:
     time.sleep(60)  # Wait a full minute to reset the rate limit
     for job_url, payload in retry_queue[:]:
         print(f"\nRetrying: {job_url}")
-        HEADERS['X-API-TOKEN'] = API_TOKEN
+        HEADERS['X-API-TOKEN'] = KEY_FILE_PATH
         try:
             post_response = session.post(OFFERS_ADD_URL, json=payload, headers=HEADERS, timeout=10)
             if post_response.status_code in (200, 201):
