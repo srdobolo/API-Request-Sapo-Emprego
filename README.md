@@ -14,14 +14,17 @@ This project provides a Python-based solution for interacting with the [SAPO Emp
 
 ### Installation
 1. Clone the repository:
-´´´bash
+
+```bash
 git clone https://github.com/srdobolo/API-Request-Sapo-Emprego.git
 cd API-Request-Sapo-Emprego
+```
 
 2. Install dependencies:
 
-´´´bash
+```bash
 pip install -r requirements.txt
+```
 
 ## Usage
 1. Prepare your job posting data following the structure in payload example.json.
@@ -31,11 +34,11 @@ pip install -r requirements.txt
 python main.py
 
 ## Files Overview
-- main.py: Core script for processing job data and handling API requests.
-- payload example.json: Sample JSON payload illustrating the expected job data format.
-- mapping.json: Defines mappings for job categories and other relevant fields.
-- country_mapping.py: Contains country code mappings to align with SAPO Emprego requirements.
-- requirements.txt: Lists all Python dependencies needed for the project.
+- [main.py](https://github.com/srdobolo/API-Request-Sapo-Emprego/blob/main/main.py): Core script for processing job data and handling API requests.
+- [payload example.json](https://github.com/srdobolo/API-Request-Sapo-Emprego/blob/main/payload%20example.json): Sample JSON payload illustrating the expected job data format.
+- [mapping.json](https://github.com/srdobolo/API-Request-Sapo-Emprego/blob/main/mapping.json): Defines mappings for job categories and other relevant fields.
+- [country_mapping.py](https://github.com/srdobolo/API-Request-Sapo-Emprego/blob/main/country_mapping.py): Contains country code mappings to align with SAPO Emprego requirements.
+- [requirements.txt](https://github.com/srdobolo/API-Request-Sapo-Emprego/blob/main/requirements.txt): Lists all Python dependencies needed for the project.
 
 ## License
 This project is licensed under the MIT License.
