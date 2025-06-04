@@ -8,6 +8,10 @@ import time
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from country_mapping import country_mapping
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Base URL for the find-jobs section
 BASE_URL = 'https://www.recruityard.com/find-jobs-all/'
@@ -27,7 +31,10 @@ ENDPOINTS = {
     "annual_salary_range_id": "/jobSalaryRange.list"
 }
 OFFERS_ADD_URL = f"{API_BASE_URL}/offers.add"
-KEY_FILE_PATH = "API_ACCESS_KEY"
+KEY_FILE_PATH = os.getenv("API_ACCESS_KEY")
+if not KEY_FILE_PATH:
+    print("Error: API_ACCESS_KEY is not set in the environment or .env file.")
+    exit(1)
 MAPPING_FILE_PATH = "mapping.json"
 
 HEADERS = {
