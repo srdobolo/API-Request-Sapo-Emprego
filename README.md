@@ -4,7 +4,7 @@
 
 
 # API-Request-Sapo-Emprego
-This project provides a Python-based solution for interacting with the (SAPO Emprego API)[https://emprego.sapo.pt/api/documentation/], enabling users to submit job postings programmatically. It includes tools for transforming structured job data into the required XML format and handling API requests efficiently.
+This project provides a Python-based solution for interacting with the [SAPO Emprego API](https://emprego.sapo.pt/api/documentation/), enabling users to submit job postings programmatically. It includes tools for transforming structured job data into the required XML format and handling API requests efficiently.
 github.com
 +1
 github.com
