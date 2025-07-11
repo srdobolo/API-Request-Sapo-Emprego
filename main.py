@@ -210,7 +210,7 @@ def process_job(job_url, mappings, api_token):
             "anonymous_company": False,
             "schedule_type_id": mappings.get('schedule_type_id', {}).get(schedule_type, None),
             "annual_salary_range_id": mappings.get('annual_salary_range_id', {}).get(max_annual_salary.lower(), None),
-            "emails_to_notify": ["info@recruityard.com", "resumes@recruityard.zohorecruitmail.eu", "joao@recruityard.com"],
+            "emails_to_notify": ["info@recruityard.com", "resumes@recruityard.zohorecruitmail.eu"],
             "start_date": start_date,
             "end_date": end_date
         }
